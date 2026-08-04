@@ -260,7 +260,38 @@ export default function App() {
     }
   };
 
-  const searchJobs = (e) => {
+  const filterMockJobs = () => {
+    const q = searchQuery.trim().toLowerCase();
+    const loc = location.trim().toLowerCase();
+    const rad = Number(radius) || 50;
+
+    return MOCK_JOBS.filter((job) => {
+      const matchesQuery =
+        !q ||
+        job.job_title.toLowerCase().includes(q) ||
+        job.job_description.toLowerCase().includes(q) ||
+        job.employer_name.toLowerCase().includes(q);
+
+      const isRemoteLocation = !loc || loc === 'remote';
+      const matchesLocation =
+        isRemoteLocation ||
+        job.job_city.toLowerCase().includes(loc) ||
+        job.job_city.toLowerCase() === 'remote';
+
+      const matchesRadius =
+        job.job_city.toLowerCase() === 'remote' ||
+        job.distance_miles === 0 ||
+        job.distance_miles <= rad;
+
+      const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
+      const matchType = !employmentType || job.employment_type === employmentType;
+      const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
+
+      return matchesQuery && matchesLocation && matchesRadius && matchEnv && matchType && matchLevel;
+    });
+  };
+
+  const searchJobs = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
     if (!isSearchValid) {
@@ -271,41 +302,74 @@ export default function App() {
     setIsSearching(true);
     setSearchError('');
 
-    setTimeout(() => {
-      const q = searchQuery.trim().toLowerCase();
-      const loc = location.trim().toLowerCase();
-      const rad = Number(radius) || 50;
+    try {
+      const res = await fetch('https://jobicy.com/api/v2/remote-jobs?count=20');
+      const data = await res.json();
 
-      const filtered = MOCK_JOBS.filter((job) => {
-        const matchesQuery =
-          !q ||
-          job.job_title.toLowerCase().includes(q) ||
-          job.job_description.toLowerCase().includes(q) ||
-          job.employer_name.toLowerCase().includes(q);
+      if (data && data.jobs && Array.isArray(data.jobs) && data.jobs.length > 0) {
+        const q = searchQuery.trim().toLowerCase();
+        const loc = location.trim().toLowerCase();
 
-        const isRemoteLocation = !loc || loc === 'remote';
-        const matchesLocation =
-          isRemoteLocation ||
-          job.job_city.toLowerCase().includes(loc) ||
-          job.job_city.toLowerCase() === 'remote';
+        const mappedJobs = data.jobs
+          .map((job) => {
+            const rawDesc = job.jobDescription || '';
+            const cleanDescription = rawDesc
+              .replace(/<[^>]*>?/gm, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
 
-        const matchesRadius =
-          job.job_city.toLowerCase() === 'remote' ||
-          job.distance_miles === 0 ||
-          job.distance_miles <= rad;
+            const empType = Array.isArray(job.jobType) && job.jobType.length > 0
+              ? job.jobType[0]
+              : (job.jobType || "Full-time");
 
-        const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
-        const matchType = !employmentType || job.employment_type === employmentType;
-        const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
+            return {
+              job_id: String(job.id || Math.random()),
+              job_title: job.jobTitle || "Job Position",
+              employer_name: job.companyName || "Employer",
+              job_city: job.jobGeo || "Remote",
+              distance_miles: 0,
+              work_environment: "Remote",
+              employment_type: empType,
+              experience_level: "Mid-level",
+              job_description: cleanDescription || "No description provided."
+            };
+          })
+          .filter((job) => {
+            const matchesQuery =
+              !q ||
+              job.job_title.toLowerCase().includes(q) ||
+              job.job_description.toLowerCase().includes(q) ||
+              job.employer_name.toLowerCase().includes(q);
 
-        return matchesQuery && matchesLocation && matchesRadius && matchEnv && matchType && matchLevel;
-      });
+            const isRemoteLocation = !loc || loc === 'remote';
+            const matchesLocation =
+              isRemoteLocation ||
+              job.job_city.toLowerCase().includes(loc) ||
+              job.job_city.toLowerCase() === 'remote';
 
-      setJobs(filtered);
+            const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
+            const matchType = !employmentType || job.employment_type === employmentType;
+            const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
+
+            return matchesQuery && matchesLocation && matchEnv && matchType && matchLevel;
+          });
+
+        if (mappedJobs.length > 0) {
+          setJobs(mappedJobs);
+        } else {
+          setJobs(filterMockJobs());
+        }
+      } else {
+        setJobs(filterMockJobs());
+      }
+    } catch (err) {
+      console.warn('Jobicy API fetch error, falling back to local mock data:', err);
+      setJobs(filterMockJobs());
+    } finally {
       setHasSearched(true);
       setIsSearching(false);
       setSelectedJobId(null);
-    }, 600);
+    }
   };
 
   const analyzeAndTailor = async (job) => {
@@ -761,7 +825,7 @@ export default function App() {
                           : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
                       }`}
                     >
-                      {isSearching ? 'Searching...' : 'Search Jobs'}
+                      {isSearching ? 'Searching Live Jobs...' : 'Search Jobs'}
                     </button>
                   </form>
 
