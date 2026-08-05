@@ -315,31 +315,19 @@ export default function App() {
       const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}`);
       const data = await res.json();
 
-      const rawJobs = data.jobs_results || data.results || [];
-
-      if (data && rawJobs.length > 0) {
-        const liveJobs = rawJobs.map((job) => {
-          const rawDesc = job.description || '';
-          const cleanDesc = rawDesc.replace(/<\/?[^>]+(>|$)/g, "").trim();
-
-          const schedType = job.detected_extensions?.schedule_type || 'Full-time';
-          const isRemote = job.detected_extensions?.work_from_home || (job.title + ' ' + cleanDesc).toLowerCase().includes('remote');
-
-          const link = job.related_links?.[0]?.link || job.apply_options?.[0]?.link || '#';
-
-          return {
-            job_id: String(job.job_id || job.id || Math.random()),
-            job_title: job.title || 'Job Position',
-            employer_name: job.company_name || job.company?.display_name || "Direct Employer",
-            job_city: job.location || job.location?.display_name || "Toronto, ON",
-            distance_miles: 0,
-            job_description: cleanDesc || "No description provided.",
-            employment_type: schedType,
-            work_environment: isRemote ? 'Remote' : 'On-site',
-            experience_level: (job.title || '').toLowerCase().includes('senior') ? 'Senior' : ((job.title || '').toLowerCase().includes('entry') ? 'Entry-level' : 'Mid-level'),
-            url: link
-          };
-        });
+      if (data && data.jobs_results && data.jobs_results.length > 0) {
+        const liveJobs = data.jobs_results.map((job) => ({
+          job_id: String(job.job_id || Math.random()),
+          job_title: job.title,
+          employer_name: job.company_name || "Direct Employer",
+          job_city: job.location || "Toronto, ON",
+          distance_miles: 0,
+          job_description: job.description || "No description provided.",
+          employment_type: job.detected_extensions?.schedule_type || "Full-time",
+          work_environment: job.detected_extensions?.work_from_home ? "Remote" : "On-site",
+          experience_level: (job.title || '').toLowerCase().includes('senior') ? 'Senior' : ((job.title || '').toLowerCase().includes('entry') ? 'Entry-level' : 'Mid-level'),
+          url: job.related_links?.[0]?.link || job.apply_options?.[0]?.link || "#"
+        }));
 
         const filtered = liveJobs.filter((job) => {
           const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
