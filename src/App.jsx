@@ -926,7 +926,7 @@ export default function App() {
                                   <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-medium rounded-full">
                                     {job.job_city}
                                   </span>
-                                  {cardMatchScore != null && (
+                                  {hasResume && cardMatchScore != null && (
                                     <div className="bg-blue-950/90 text-blue-400 border border-blue-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
                                       Match: {cardMatchScore}%
                                     </div>
@@ -1014,7 +1014,7 @@ export default function App() {
                           <span className="px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-semibold rounded-full">
                             {selectedJob.job_city}
                           </span>
-                          {(() => {
+                          {hasResume && (() => {
                             const activeResume = masterResumeText || resumeText;
                             const detailMatchScore = selectedJob.matchScore !== undefined
                               ? selectedJob.matchScore
@@ -1051,8 +1051,8 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Action: Analyze & Tailor Button - Hidden if currentAnalysis exists */}
-                    {!currentAnalysis && (
+                    {/* Action: Analyze & Tailor Button - Only if resume is uploaded */}
+                    {hasResume && !currentAnalysis && (
                       <div className="pt-2">
                         <button
                           type="button"
@@ -1065,6 +1065,14 @@ export default function App() {
                           </svg>
                           {isCurrentAnalyzing ? 'Analyzing with Gemini...' : 'Analyze & Tailor Resume for this Role'}
                         </button>
+                      </div>
+                    )}
+
+                    {!hasResume && (
+                      <div className="p-4 bg-slate-950 border border-slate-800/80 rounded-xl text-center space-y-1">
+                        <p className="text-xs text-slate-400">
+                          💡 Upload your resume to unlock ATS match scoring & AI resume tailoring for this job.
+                        </p>
                       </div>
                     )}
 
