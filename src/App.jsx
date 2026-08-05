@@ -297,9 +297,6 @@ export default function App() {
     });
   };
 
-  const APP_ID = import.meta.env.VITE_ADZUNA_APP_ID || "a3d324d0";
-  const APP_KEY = import.meta.env.VITE_ADZUNA_APP_KEY || "bd2503dc17601ae96626021aeb946391";
-
   const searchJobs = async (e, forceSearch = false) => {
     if (e && e.preventDefault) e.preventDefault();
 
@@ -311,14 +308,12 @@ export default function App() {
     setIsSearching(true);
     setSearchError('');
 
-    const queryWhat = searchQuery ? `&what=${encodeURIComponent(searchQuery)}` : '&what=software';
-    const queryWhere = location ? `&where=${encodeURIComponent(location)}` : '&where=Toronto';
-    const endpoint = `https://api.adzuna.com/v1/api/jobs/ca/search/1?app_id=${APP_ID}&app_key=${APP_KEY}&results_per_page=20${queryWhat}${queryWhere}&content-type=application/json`;
+    const term = searchQuery.trim() || 'software';
+    const loc = location.trim() || 'Toronto';
 
     try {
-      const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(endpoint)}`);
-      const wrapper = await response.json();
-      const data = JSON.parse(wrapper.contents);
+      const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}`);
+      const data = await res.json();
 
       if (data && data.results && data.results.length > 0) {
         const liveJobs = data.results.map((job) => ({
@@ -350,7 +345,7 @@ export default function App() {
         setJobs(filterMockJobs());
       }
     } catch (err) {
-      console.error("Adzuna error:", err);
+      console.error("Fetch error:", err);
       setJobs(filterMockJobs());
     } finally {
       setHasSearched(true);
