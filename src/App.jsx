@@ -310,9 +310,10 @@ export default function App() {
 
     const term = searchQuery.trim() || 'software';
     const loc = location.trim() || 'Toronto';
+    const dist = radius || 50;
 
     try {
-      const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}`);
+      const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}&distance=${encodeURIComponent(dist)}`);
       const data = await res.json();
 
       if (data && data.results && data.results.length > 0) {
