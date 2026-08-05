@@ -953,8 +953,18 @@ export default function App() {
                     {/* Job Description */}
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Job Description</h3>
-                      <div className="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl text-xs text-slate-300 leading-relaxed space-y-3">
-                        <p>{selectedJob.job_description}</p>
+                      <div className="job-description-content p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl text-slate-300 space-y-4 leading-relaxed whitespace-pre-line text-sm">
+                        {selectedJob?.job_description ? (
+                          selectedJob.job_description
+                            .split('\n\n')
+                            .map((paragraph, index) => (
+                              <p key={index} className="mb-3">
+                                {paragraph}
+                              </p>
+                            ))
+                        ) : (
+                          <p>No description provided.</p>
+                        )}
                       </div>
                     </div>
 
