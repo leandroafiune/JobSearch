@@ -205,6 +205,12 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (step === 3 && jobs.length === 0 && !hasSearched) {
+      searchJobs(null, true);
+    }
+  }, [step]);
+
   // Search input validation check
   const hasJobTitle = Boolean(searchQuery.trim());
   const hasLocation = Boolean(location.trim());
@@ -291,10 +297,13 @@ export default function App() {
     });
   };
 
-  const searchJobs = async (e) => {
+  const APP_ID = import.meta.env.VITE_ADZUNA_APP_ID || "a3d324d0";
+  const APP_KEY = import.meta.env.VITE_ADZUNA_APP_KEY || "bd2503dc17601ae96626021aeb946391";
+
+  const searchJobs = async (e, forceSearch = false) => {
     if (e && e.preventDefault) e.preventDefault();
 
-    if (!isSearchValid) {
+    if (!forceSearch && !isSearchValid) {
       setSearchError("Please enter a Job Title and Location, or upload a Resume with a Job Title to search.");
       return;
     }
@@ -302,73 +311,50 @@ export default function App() {
     setIsSearching(true);
     setSearchError('');
 
+    const queryWhat = searchQuery ? `&what=${encodeURIComponent(searchQuery)}` : '&what=software';
+    const queryWhere = location ? `&where=${encodeURIComponent(location)}` : '&where=Toronto';
+    const endpoint = `https://api.adzuna.com/v1/api/jobs/ca/search/1?app_id=${APP_ID}&app_key=${APP_KEY}&results_per_page=20${queryWhat}${queryWhere}&content-type=application/json`;
+
     try {
-      const res = await fetch('https://jobicy.com/api/v2/remote-jobs?count=20');
-      const data = await res.json();
+      const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(endpoint)}`);
+      const wrapper = await response.json();
+      const data = JSON.parse(wrapper.contents);
 
-      if (data && data.jobs && Array.isArray(data.jobs) && data.jobs.length > 0) {
-        const q = searchQuery.trim().toLowerCase();
-        const loc = location.trim().toLowerCase();
+      if (data && data.results && data.results.length > 0) {
+        const liveJobs = data.results.map((job) => ({
+          job_id: String(job.id),
+          job_title: job.title.replace(/<\/?[^>]+(>|$)/g, ""),
+          employer_name: job.company?.display_name || "Direct Employer",
+          job_city: job.location?.display_name || "Toronto, ON",
+          distance_miles: 0,
+          job_description: job.description.replace(/<\/?[^>]+(>|$)/g, ""),
+          employment_type: job.contract_type === 'contract' ? 'Contract' : 'Full-time',
+          work_environment: (job.title + " " + job.description).toLowerCase().includes('remote') ? 'Remote' : 'On-site',
+          experience_level: job.title.toLowerCase().includes('senior') ? 'Senior' : (job.title.toLowerCase().includes('entry') ? 'Entry-level' : 'Mid-level'),
+          url: job.redirect_url
+        }));
 
-        const mappedJobs = data.jobs
-          .map((job) => {
-            const rawDesc = job.jobDescription || '';
-            const cleanDescription = rawDesc
-              .replace(/<[^>]*>?/gm, ' ')
-              .replace(/\s+/g, ' ')
-              .trim();
+        const filtered = liveJobs.filter((job) => {
+          const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
+          const matchType = !employmentType || job.employment_type === employmentType;
+          const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
+          return matchEnv && matchType && matchLevel;
+        });
 
-            const empType = Array.isArray(job.jobType) && job.jobType.length > 0
-              ? job.jobType[0]
-              : (job.jobType || "Full-time");
-
-            return {
-              job_id: String(job.id || Math.random()),
-              job_title: job.jobTitle || "Job Position",
-              employer_name: job.companyName || "Employer",
-              job_city: job.jobGeo || "Remote",
-              distance_miles: 0,
-              work_environment: "Remote",
-              employment_type: empType,
-              experience_level: "Mid-level",
-              job_description: cleanDescription || "No description provided."
-            };
-          })
-          .filter((job) => {
-            const matchesQuery =
-              !q ||
-              job.job_title.toLowerCase().includes(q) ||
-              job.job_description.toLowerCase().includes(q) ||
-              job.employer_name.toLowerCase().includes(q);
-
-            const isRemoteLocation = !loc || loc === 'remote';
-            const matchesLocation =
-              isRemoteLocation ||
-              job.job_city.toLowerCase().includes(loc) ||
-              job.job_city.toLowerCase() === 'remote';
-
-            const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
-            const matchType = !employmentType || job.employment_type === employmentType;
-            const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
-
-            return matchesQuery && matchesLocation && matchEnv && matchType && matchLevel;
-          });
-
-        if (mappedJobs.length > 0) {
-          setJobs(mappedJobs);
-        } else {
-          setJobs(filterMockJobs());
+        const finalJobs = filtered.length > 0 ? filtered : liveJobs;
+        setJobs(finalJobs);
+        if (finalJobs.length > 0) {
+          setSelectedJobId(finalJobs[0].job_id);
         }
       } else {
         setJobs(filterMockJobs());
       }
     } catch (err) {
-      console.warn('Jobicy API fetch error, falling back to local mock data:', err);
+      console.error("Adzuna error:", err);
       setJobs(filterMockJobs());
     } finally {
       setHasSearched(true);
       setIsSearching(false);
-      setSelectedJobId(null);
     }
   };
 
