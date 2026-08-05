@@ -250,12 +250,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (step === 3 && jobs.length === 0 && !hasSearched) {
-      searchJobs(null, true);
-    }
-  }, [step]);
-
   // Search input validation check
   const hasJobTitle = Boolean(searchQuery.trim());
   const hasLocation = Boolean(location.trim());
@@ -877,6 +871,20 @@ export default function App() {
 
                 {/* Jobs List (Master View) */}
                 <div className="flex-1 space-y-3">
+                  {!hasSearched && jobs.length === 0 && !isSearching && (
+                    <div className="p-6 bg-slate-900/80 border border-slate-800 rounded-xl text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-slate-400 mx-auto mb-1">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-200">Ready to Search</h4>
+                      <p className="text-xs text-slate-400">
+                        Enter a Job Title and Location, or upload a Resume to perform a search and view listings.
+                      </p>
+                    </div>
+                  )}
+
                   {hasSearched && jobs.length === 0 && !isSearching && (
                     <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl text-center">
                       <p className="text-xs text-slate-400">
