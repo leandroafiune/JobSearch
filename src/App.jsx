@@ -3,6 +3,51 @@ import mammoth from 'mammoth';
 import { GoogleGenAI } from '@google/genai';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 
+const STOP_WORDS = new Set([
+  'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at',
+  'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'can', 'could',
+  'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'has', 'have',
+  'having', 'he', 'her', 'here', 'hers', 'him', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'its',
+  'just', 'me', 'more', 'most', 'my', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other',
+  'our', 'out', 'over', 'own', 'same', 'she', 'should', 'so', 'some', 'such', 'than', 'that', 'the', 'their',
+  'them', 'then', 'there', 'these', 'they', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up',
+  'very', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'with', 'would',
+  'you', 'your'
+]);
+
+function calculateMatchScore(resumeText, jobDescription) {
+  if (!resumeText || !resumeText.trim() || !jobDescription || !jobDescription.trim()) {
+    return null;
+  }
+
+  const cleanResumeWords = new Set(
+    resumeText
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+  );
+
+  const jobWords = jobDescription
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+
+  const uniqueJobKeywords = new Set(jobWords);
+  if (uniqueJobKeywords.size === 0) return null;
+
+  let overlap = 0;
+  uniqueJobKeywords.forEach((word) => {
+    if (cleanResumeWords.has(word)) {
+      overlap++;
+    }
+  });
+
+  const percentage = Math.round((overlap / uniqueJobKeywords.size) * 100);
+  return Math.max(10, Math.min(98, percentage));
+}
+
 const MOCK_JOBS = [
   {
     job_id: "1",
@@ -270,6 +315,7 @@ export default function App() {
     const q = searchQuery.trim().toLowerCase();
     const loc = location.trim().toLowerCase();
     const rad = Number(radius) || 50;
+    const activeResume = masterResumeText || resumeText;
 
     return MOCK_JOBS.filter((job) => {
       const matchesQuery =
@@ -294,7 +340,10 @@ export default function App() {
       const matchLevel = !experienceLevel || job.experience_level === experienceLevel;
 
       return matchesQuery && matchesLocation && matchesRadius && matchEnv && matchType && matchLevel;
-    });
+    }).map((job) => ({
+      ...job,
+      matchScore: calculateMatchScore(activeResume, job.job_description)
+    }));
   };
 
   const searchJobs = async (e, forceSearch = false) => {
@@ -310,24 +359,29 @@ export default function App() {
 
     const term = searchQuery.trim() || 'software';
     const loc = location.trim() || 'Toronto';
+    const activeResume = masterResumeText || resumeText;
 
     try {
-      const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}`);
+      const res = await fetch(`/api/jobs?what=${encodeURIComponent(term)}&where=${encodeURIComponent(loc)}&radius=${encodeURIComponent(radius || 50)}`);
       const data = await res.json();
 
       if (data && data.jobs_results && data.jobs_results.length > 0) {
-        const liveJobs = data.jobs_results.map((job) => ({
-          job_id: String(job.job_id || Math.random()),
-          job_title: job.title,
-          employer_name: job.company_name || "Direct Employer",
-          job_city: job.location || "Toronto, ON",
-          distance_miles: 0,
-          job_description: job.description || "No description provided.",
-          employment_type: job.detected_extensions?.schedule_type || "Full-time",
-          work_environment: job.detected_extensions?.work_from_home ? "Remote" : "On-site",
-          experience_level: (job.title || '').toLowerCase().includes('senior') ? 'Senior' : ((job.title || '').toLowerCase().includes('entry') ? 'Entry-level' : 'Mid-level'),
-          url: job.related_links?.[0]?.link || job.apply_options?.[0]?.link || "#"
-        }));
+        const liveJobs = data.jobs_results.map((job) => {
+          const desc = job.description || "No description provided.";
+          return {
+            job_id: String(job.job_id || Math.random()),
+            job_title: job.title,
+            employer_name: job.company_name || "Direct Employer",
+            job_city: job.location || "Toronto, ON",
+            distance_miles: 0,
+            job_description: desc,
+            employment_type: job.detected_extensions?.schedule_type || "Full-time",
+            work_environment: job.detected_extensions?.work_from_home ? "Remote" : "On-site",
+            experience_level: (job.title || '').toLowerCase().includes('senior') ? 'Senior' : ((job.title || '').toLowerCase().includes('entry') ? 'Entry-level' : 'Mid-level'),
+            url: job.related_links?.[0]?.link || job.apply_options?.[0]?.link || "#",
+            matchScore: calculateMatchScore(activeResume, desc)
+          };
+        });
 
         const filtered = liveJobs.filter((job) => {
           const matchEnv = !workEnvironment || job.work_environment === workEnvironment;
@@ -840,6 +894,10 @@ export default function App() {
                         {jobs.map((job) => {
                           const isSelected = selectedJobId === job.job_id;
                           const jobAnalysis = analyzedJobs[job.job_id];
+                          const activeResume = masterResumeText || resumeText;
+                          const cardMatchScore = job.matchScore !== undefined
+                            ? job.matchScore
+                            : calculateMatchScore(activeResume, job.job_description);
 
                           return (
                             <div
@@ -860,6 +918,11 @@ export default function App() {
                                   <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-medium rounded-full">
                                     {job.job_city}
                                   </span>
+                                  {cardMatchScore != null && (
+                                    <div className="bg-blue-950/90 text-blue-400 border border-blue-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                      Match: {cardMatchScore}%
+                                    </div>
+                                  )}
                                   {jobAnalysis && (
                                     <div className="bg-emerald-950/90 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
                                       Fit: {jobAnalysis.fit_score}%
@@ -939,12 +1002,24 @@ export default function App() {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex flex-col items-end gap-1.5">
                           <span className="px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-semibold rounded-full">
                             {selectedJob.job_city}
                           </span>
+                          {(() => {
+                            const activeResume = masterResumeText || resumeText;
+                            const detailMatchScore = selectedJob.matchScore !== undefined
+                              ? selectedJob.matchScore
+                              : calculateMatchScore(activeResume, selectedJob.job_description);
+
+                            return detailMatchScore != null ? (
+                              <span className="px-3 py-1 bg-blue-950/90 text-blue-400 border border-blue-500/30 text-xs font-bold rounded-full shadow-sm">
+                                🎯 {detailMatchScore}% Match
+                              </span>
+                            ) : null;
+                          })()}
                           {selectedJob.distance_miles > 0 && (
-                            <p className="text-xs text-slate-500 mt-1.5">{selectedJob.distance_miles} miles away</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{selectedJob.distance_miles} miles away</p>
                           )}
                         </div>
                       </div>
